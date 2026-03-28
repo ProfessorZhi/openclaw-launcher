@@ -1,78 +1,63 @@
 # OpenClaw Launcher
 
+Windows Electron launcher for running local OpenClaw with a safer data layout when ClawX is also installed.
+
 ## 中文说明
 
-OpenClaw Launcher 是一个面向 Windows 的 Electron 启动器，适合同时使用 OpenClaw 和 ClawX，并希望统一管理启动流程、共享数据、日志和模型配置的人。
+OpenClaw Launcher 是一个面向 Windows 的 Electron 启动器，用来启动本地 OpenClaw，并尽量减少它对 ClawX 主环境的干扰。
 
-它适合这样的使用场景：
+这版 launcher 重点解决了两个实际问题：
 
-- OpenClaw 源码仓库放在一个目录
-- ClawX 桌面客户端安装在另一个目录
-- 两者共用同一套 `state`、`logs`、`workspace`
+- 控制台网页打开时会自动带上 gateway token，不会再落到“缺少网关令牌”页面
+- launcher 不再强依赖 `C:\Users\Administrator\.openclaw` 这类全局入口，而是在自己的数据根目录下维护独立的 `launcher-profile`
 
-### 主要功能
+### 当前推荐的数据布局
 
-- 启动 OpenClaw 并打开本地网页控制台
-- 停止当前 OpenClaw 实例
-- 提供前台调试启动
-- 在启动器里配置模型 API
-- 自动发现 OpenClaw 仓库路径和 ClawX 可执行文件
-- 管理共享数据根目录，并迁移 `state`、`logs`、`workspace`
+推荐把运行时数据放到单独的数据根目录，而不是混在安装目录里。
 
-### Release 形态
+例如：
 
-发布时建议提供两种 Windows 资产：
+- `F:\ClawXData`
+  ClawX 主环境，优先保留原有工作空间、memory、agent 状态
+- `F:\OpenClawData`
+  OpenClaw Launcher 侧环境，出现冲突时优先牺牲这一侧
 
-- 安装版
-  适合普通用户，走标准 Setup 安装流程
-- 便携版
-  单文件 exe，适合本地测试或手动分发
-
-这两种形态都读取同一份用户级 launcher 配置，因此可以共用同一套共享数据目录。
-
-### 共享数据模型
-
-启动器会把程序文件和运行数据分开。
-
-默认情况下，共享数据根目录会跟着安装所在盘走：
-
-- 安装在 `E:` 盘时，默认共享根目录是 `E:\OpenClaw Shared Data`
-- 安装在 `F:` 盘时，默认共享根目录是 `F:\OpenClaw Shared Data`
-
-共享根目录里主要包含：
+launcher 会在 `dataRoot` 下维护这些目录：
 
 - `state`
 - `logs`
 - `workspace`
+- `launcher-profile`
 
-启动器还会维护这个 Windows junction：
+其中：
 
-- `C:\Users\Administrator\.openclaw`
+- `state` 是 OpenClaw 运行状态目录
+- `workspace` 可以放 agent 工作区和你自己扩展出来的内容
+- `launcher-profile\.openclaw` 会被自动创建为指向 `state` 的 junction
 
-它会始终指向当前生效的共享 `state` 目录。只要 OpenClaw 和 ClawX 都依赖同一个 `.openclaw` 入口，它们就能共用同一套底层状态。
+这样 launcher 调起 OpenClaw CLI 时，会优先使用自己的 profile，不再默认和 ClawX 共用同一套用户主目录。
 
-Launcher 自己的用户级配置文件在：
+### 主要能力
+
+- 启动 OpenClaw 并打开本地控制台
+- 自动为控制台 URL 拼接 `#token=...`
+- 打开命令行窗口并注入 launcher 专属环境变量
+- 自动发现 OpenClaw 仓库路径与 ClawX 可执行文件路径
+- 管理并迁移 `state`、`logs`、`workspace`
+
+### 关键配置
+
+用户级 launcher 配置：
 
 - `%USERPROFILE%\.openclaw-launcher\config\launcher-settings.json`
 
-因此安装版和便携版可以共享同一份路径配置。
+常见字段：
 
-### 自动发现
+- `dataRoot`
+- `openclawRepoPath`
+- `clawxExePath`
 
-启动器可以自动发现：
-
-- OpenClaw 仓库目录
-- ClawX 可执行文件路径
-- 当前共享数据根目录
-
-共享根目录的发现顺序是：
-
-1. 读取已保存的 `dataRoot`
-2. 检查 `C:\Users\Administrator\.openclaw`
-3. 如果它指向 `...\state`，则反推出共享根目录
-4. 否则回退到安装盘默认共享目录
-
-### 哪些文件适合上传 GitHub
+### 适合提交到 GitHub 的内容
 
 建议提交：
 
@@ -90,97 +75,68 @@ Launcher 自己的用户级配置文件在：
 - `state/`
 - `logs/`
 - `workspace/`
-- `%USERPROFILE%\.openclaw-launcher` 下的个人配置
+- 用户自己的本地配置和运行数据
 
-### 构建产物
+### 构建
 
-构建输出目录：
-
-- `launcher-src/dist/`
-
-常用命令：
+在 `launcher-src` 下执行：
 
 - `npm run dist:portable`
 - `npm run dist:installer`
 - `npm run dist:win`
 
-通常不建议把生成的 exe 直接提交进 Git，因为它们属于可重建产物。
+构建产物输出到：
 
-### 相关文档
-
-- `docs/coordination.md`
+- `launcher-src/dist/`
 
 ## English
 
-OpenClaw Launcher is a Windows Electron launcher for people who use OpenClaw and ClawX together and want one place to manage startup, shared data, logs, and model configuration.
+OpenClaw Launcher is a Windows Electron launcher for local OpenClaw setups that need a cleaner separation from ClawX.
 
-It is designed for a setup where:
+This version focuses on two practical fixes:
 
-- the OpenClaw source repo lives in one folder
-- the ClawX desktop app lives somewhere else
-- both should reuse one shared data root for `state`, `logs`, and `workspace`
+- the dashboard URL now opens with the gateway token attached
+- the launcher now keeps its own `launcher-profile` under the configured `dataRoot` instead of depending on a shared global `.openclaw` entry
 
-### Main features
+### Recommended data layout
 
-- start OpenClaw and open the local web console
-- stop the current OpenClaw instance
-- offer a foreground debug start
-- edit model API settings inside the launcher
-- auto-discover the OpenClaw repo path and the ClawX executable path
-- manage the shared data root and migrate `state`, `logs`, and `workspace`
+Use separate runtime roots instead of mixing app files and runtime state.
 
-### Release formats
+Example:
 
-Two Windows release assets are recommended:
+- `F:\ClawXData`
+  primary ClawX environment
+- `F:\OpenClawData`
+  launcher-side environment that can be treated as disposable if conflicts happen
 
-- installer build
-  for standard end-user setup
-- portable build
-  for local testing or manual distribution
-
-Both builds read the same user-level launcher settings, so they can reuse the same OpenClaw shared data root.
-
-### Shared data model
-
-The launcher separates program files from runtime data.
-
-By default, the shared data root follows the drive where the launcher is installed:
-
-- installed on `E:` -> `E:\OpenClaw Shared Data`
-- installed on `F:` -> `F:\OpenClaw Shared Data`
-
-Inside that shared root, the launcher manages:
+The launcher manages these directories under `dataRoot`:
 
 - `state`
 - `logs`
 - `workspace`
+- `launcher-profile`
 
-It also keeps this Windows junction aligned with the active shared state folder:
+`launcher-profile\.openclaw` is maintained as a junction to `state`, so launcher-driven OpenClaw commands resolve through a launcher-owned profile instead of the main ClawX profile.
 
-- `C:\Users\Administrator\.openclaw`
+### Main capabilities
 
-As long as OpenClaw and ClawX both resolve through that same `.openclaw` entry, they can share the same underlying state.
+- start OpenClaw and open the local dashboard
+- open the dashboard with `#token=...`
+- open a CLI window with launcher-specific environment variables
+- auto-detect the OpenClaw repo path and ClawX executable path
+- manage and migrate `state`, `logs`, and `workspace`
 
-The launcher's own user-level settings file lives at:
+### Configuration
+
+User-level launcher settings live at:
 
 - `%USERPROFILE%\.openclaw-launcher\config\launcher-settings.json`
 
-That allows installed and portable builds to share the same saved path settings.
+Common fields:
 
-### Auto-discovery
-
-The launcher can auto-discover:
-
-- the OpenClaw repo directory
-- the ClawX executable path
-- the current shared data root
-
-Shared root discovery works in this order:
-
-1. read the saved `dataRoot`
-2. inspect `C:\Users\Administrator\.openclaw`
-3. if it points to `...\state`, infer the shared root from it
-4. otherwise fall back to the default shared root for the install drive
+- `dataRoot`
+- `openclawRepoPath`
+- `clawxExePath`
 
 ### What should go to GitHub
 
@@ -200,22 +156,16 @@ Recommended to keep out of Git:
 - `state/`
 - `logs/`
 - `workspace/`
-- personal settings under `%USERPROFILE%\.openclaw-launcher`
+- local user settings and runtime data
 
-### Build output
+### Build
 
-Generated artifacts live under:
-
-- `launcher-src/dist/`
-
-Useful commands:
+Run inside `launcher-src`:
 
 - `npm run dist:portable`
 - `npm run dist:installer`
 - `npm run dist:win`
 
-The generated executables should usually stay out of Git because they are rebuildable artifacts.
+Build output goes to:
 
-### Related documentation
-
-- `docs/coordination.md`
+- `launcher-src/dist/`

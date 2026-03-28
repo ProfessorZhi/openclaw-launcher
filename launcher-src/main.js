@@ -5,7 +5,6 @@ const http = require("http");
 const path = require("path");
 
 const PORT = 18789;
-const USER_OPENCLAW_LINK = "C:\\Users\\Administrator\\.openclaw";
 
 function detectRoot() {
   const normalized = path.normalize(__dirname);
@@ -190,10 +189,12 @@ function moveDirIfNeeded(oldDir, newDir) {
   fs.rmSync(oldDir, { recursive: true, force: true });
 }
 
-async function ensureUserOpenClawJunction(stateDir) {
+async function ensureLauncherOpenClawJunction(settings = loadSettings()) {
+  const stateDir = getRuntimePaths(settings).stateDir;
+  const launcherLink = getLauncherOpenClawLink(settings);
   const normalizedTarget = path.resolve(stateDir);
   const existingTarget = await runPowerShell(`
-    $item = Get-Item '${escapePs(USER_OPENCLAW_LINK)}' -ErrorAction SilentlyContinue
+    $item = Get-Item '${escapePs(launcherLink)}' -ErrorAction SilentlyContinue
     if ($item -and $item.LinkType -eq 'Junction' -and $item.Target) {
       $target = $item.Target
       if ($target -is [array]) { $target = $target[0] }
@@ -207,10 +208,18 @@ async function ensureUserOpenClawJunction(stateDir) {
   }
 
   await runPowerShell(`
-    if (Test-Path '${escapePs(USER_OPENCLAW_LINK)}') {
-      cmd /c rmdir "${USER_OPENCLAW_LINK}" | Out-Null
+    $profileDir = '${escapePs(getLauncherProfileDir(settings))}'
+    $launcherLink = '${escapePs(launcherLink)}'
+    New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
+    if (Test-Path $launcherLink) {
+      $item = Get-Item $launcherLink -Force
+      if ($item.PSIsContainer) {
+        cmd /c rmdir "$launcherLink" | Out-Null
+      } else {
+        Remove-Item $launcherLink -Force
+      }
     }
-    New-Item -ItemType Junction -Path '${escapePs(USER_OPENCLAW_LINK)}' -Target '${escapePs(stateDir)}' | Out-Null
+    New-Item -ItemType Junction -Path $launcherLink -Target '${escapePs(stateDir)}' | Out-Null
   `);
 }
 
@@ -221,7 +230,7 @@ async function migrateDataRoot(oldSettings, newSettings) {
   moveDirIfNeeded(oldPaths.stateDir, newPaths.stateDir);
   moveDirIfNeeded(oldPaths.logsDir, newPaths.logsDir);
   moveDirIfNeeded(oldPaths.workspaceDir, newPaths.workspaceDir);
-  await ensureUserOpenClawJunction(newPaths.stateDir);
+  await ensureLauncherOpenClawJunction(newSettings);
 }
 
 async function saveIntegrationSettings(payload) {
@@ -239,7 +248,7 @@ async function saveIntegrationSettings(payload) {
     await migrateDataRoot(oldSettings, nextSettings);
   } else {
     ensureDataDirs(nextSettings);
-    await ensureUserOpenClawJunction(getRuntimePaths(nextSettings).stateDir);
+    await ensureLauncherOpenClawJunction(nextSettings);
   }
 
   saveSettings(nextSettings);
@@ -249,7 +258,7 @@ async function saveIntegrationSettings(payload) {
 async function detectInstallations() {
   const settings = loadSettings();
   const linkTarget = await runPowerShell(`
-    $item = Get-Item '${escapePs(USER_OPENCLAW_LINK)}' -ErrorAction SilentlyContinue
+    $item = Get-Item '${escapePs(getLauncherOpenClawLink(settings))}' -ErrorAction SilentlyContinue
     if ($item -and $item.LinkType -eq 'Junction' -and $item.Target) {
       $target = $item.Target
       if ($target -is [array]) { $target = $target[0] }
@@ -376,6 +385,21 @@ function clearPidRecord(runtime = getRuntimePaths()) {
   } catch {}
 }
 
+function getGatewayAuthToken(settings = loadSettings()) {
+  const runtime = getRuntimePaths(settings);
+  const config = readJsonSafe(runtime.configPath) || {};
+  const token = config.gateway?.auth?.token;
+  return typeof token === "string" && token.trim() ? token.trim() : "";
+}
+
+function getDashboardOpenUrl(settings = loadSettings()) {
+  const token = getGatewayAuthToken(settings);
+  if (!token) {
+    return DASHBOARD_URL;
+  }
+  return `${DASHBOARD_URL}#token=${encodeURIComponent(token)}`;
+}
+
 async function getStatusSnapshot() {
   const settings = loadSettings();
   const runtime = ensureDataDirs(settings);
@@ -395,6 +419,7 @@ async function getStatusSnapshot() {
         listenerPid: listener.OwningProcess,
         dashboardReady,
         dashboardUrl: DASHBOARD_URL,
+        dashboardOpenUrl: getDashboardOpenUrl(settings),
         clawxRunning: Boolean(clawxRunning)
       };
     }
@@ -408,6 +433,7 @@ async function getStatusSnapshot() {
         listenerPid: listener.OwningProcess,
         dashboardReady,
         dashboardUrl: DASHBOARD_URL,
+        dashboardOpenUrl: getDashboardOpenUrl(settings),
         clawxRunning: true
       };
     }
@@ -420,6 +446,7 @@ async function getStatusSnapshot() {
       listenerPid: listener.OwningProcess,
       dashboardReady,
       dashboardUrl: DASHBOARD_URL,
+      dashboardOpenUrl: getDashboardOpenUrl(settings),
       clawxRunning: false
     };
   }
@@ -432,7 +459,28 @@ async function getStatusSnapshot() {
     listenerPid: null,
     dashboardReady: false,
     dashboardUrl: DASHBOARD_URL,
+    dashboardOpenUrl: getDashboardOpenUrl(settings),
     clawxRunning: Boolean(clawxRunning)
+  };
+}
+
+function getLauncherProfileDir(settings = loadSettings()) {
+  return path.join(getRuntimePaths(settings).dataRoot, "launcher-profile");
+}
+
+function getLauncherOpenClawLink(settings = loadSettings()) {
+  return path.join(getLauncherProfileDir(settings), ".openclaw");
+}
+
+function getLauncherProfileEnv(settings = loadSettings()) {
+  const launcherProfileDir = getLauncherProfileDir(settings);
+  const profileRoot = path.parse(launcherProfileDir).root;
+  const homePath = launcherProfileDir.slice(profileRoot.length - 1);
+
+  return {
+    launcherProfileDir,
+    profileRoot,
+    homePath
   };
 }
 
@@ -440,15 +488,21 @@ async function spawnManagedGateway() {
   const settings = loadSettings();
   const runtime = ensureDataDirs(settings);
   const repo = settings.openclawRepoPath;
+  const profileEnv = getLauncherProfileEnv(settings);
 
   if (!repo || !fs.existsSync(path.join(repo, "openclaw.mjs"))) {
     throw new Error("OpenClaw repo path is invalid. Expected to find openclaw.mjs there.");
   }
 
   clearPidRecord(runtime);
+  await ensureLauncherOpenClawJunction(settings);
 
   const script = `
     Set-Location '${escapePs(repo)}'
+    $env:USERPROFILE='${escapePs(profileEnv.launcherProfileDir)}'
+    $env:HOME='${escapePs(profileEnv.launcherProfileDir)}'
+    $env:HOMEDRIVE='${escapePs(profileEnv.profileRoot.replace(/\\$/, ""))}'
+    $env:HOMEPATH='${escapePs(profileEnv.homePath)}'
     $env:OPENCLAW_STATE_DIR='${escapePs(runtime.stateDir)}'
     $env:OPENCLAW_CONFIG_PATH='${escapePs(runtime.configPath)}'
     [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -486,7 +540,8 @@ function computeProgress(elapsedMs) {
 
 async function monitorLaunchLifecycle(openBrowser, token) {
   const startedAt = Date.now();
-  const runtime = getRuntimePaths();
+  const settings = loadSettings();
+  const runtime = getRuntimePaths(settings);
   let browserOpened = false;
   let firstOnlineAt = null;
 
@@ -544,7 +599,7 @@ async function monitorLaunchLifecycle(openBrowser, token) {
 
         if (openBrowser && !browserOpened) {
           browserOpened = true;
-          await shell.openExternal(DASHBOARD_URL);
+          await shell.openExternal(getDashboardOpenUrl(settings));
         }
 
         emitProgress({
@@ -598,7 +653,7 @@ async function startNormalLaunch() {
   }
 
   if (snapshot.kind === "launcher" || snapshot.kind === "orphan") {
-    await shell.openExternal(DASHBOARD_URL);
+    await shell.openExternal(getDashboardOpenUrl(loadSettings()));
     return { ok: true, message: "OpenClaw is already running. Opening the dashboard instead." };
   }
 
@@ -811,14 +866,14 @@ function createWindow() {
 app.whenReady().then(async () => {
   ensureDataDirs();
   createWindow();
-  ensureUserOpenClawJunction(getRuntimePaths().stateDir).catch(() => {});
+  ensureLauncherOpenClawJunction(loadSettings()).catch(() => {});
 
   ipcMain.handle("status:get", async () => getStatusSnapshot());
   ipcMain.handle("launch:start-normal", async () => startNormalLaunch());
   ipcMain.handle("launch:start-debug", async () => startDebugLaunch());
   ipcMain.handle("launch:stop-current", async () => stopCurrentInstance());
   ipcMain.handle("open:dashboard", async () => {
-    await shell.openExternal(DASHBOARD_URL);
+    await shell.openExternal(getDashboardOpenUrl(loadSettings()));
     return { ok: true };
   });
   ipcMain.handle("open:logs", async () => {
@@ -832,10 +887,19 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
   ipcMain.handle("open:cli", async () => {
-    const repo = loadSettings().openclawRepoPath;
+    const settings = loadSettings();
+    const repo = settings.openclawRepoPath;
+    const runtime = getRuntimePaths(settings);
+    const profileEnv = getLauncherProfileEnv(settings);
     const cliScript = `
 $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Set-Location '${escapePs(repo)}'
+$env:USERPROFILE='${escapePs(profileEnv.launcherProfileDir)}'
+$env:HOME='${escapePs(profileEnv.launcherProfileDir)}'
+$env:HOMEDRIVE='${escapePs(profileEnv.profileRoot.replace(/\\$/, ""))}'
+$env:HOMEPATH='${escapePs(profileEnv.homePath)}'
+$env:OPENCLAW_STATE_DIR='${escapePs(runtime.stateDir)}'
+$env:OPENCLAW_CONFIG_PATH='${escapePs(runtime.configPath)}'
 function openclaw { node .\\openclaw.mjs @args }
 Write-Host 'OpenClaw 闂佸憡绋掗崹婵嬪箮閵堝洦鍋橀悘鐐舵閸ゆ帡鎮樿箛姘惈闁告閰ｆ俊?
 Write-Host ''
