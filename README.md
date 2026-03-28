@@ -17,6 +17,17 @@ It is designed for a setup where:
 - discovers the OpenClaw repo path and the ClawX executable path
 - manages the shared data root and migrates `state`, `logs`, and `workspace`
 
+## Release formats
+
+Releases are intended to ship two Windows assets:
+
+- installer build
+  standard setup flow for normal users
+- portable build
+  one-file executable for local testing or manual distribution
+
+Both builds read the same user-level launcher settings and can share the same OpenClaw data root.
+
 ## Shared data model
 
 The launcher separates program files from runtime data.
@@ -37,6 +48,12 @@ It also keeps this Windows junction aligned with the active shared state folder:
 - `C:\Users\Administrator\.openclaw`
 
 That means OpenClaw and ClawX can share the same underlying state as long as they both resolve through the same `.openclaw` entry and shared root.
+
+Launcher settings are stored per user under:
+
+- `%USERPROFILE%\.openclaw-launcher\config\launcher-settings.json`
+
+That allows installed and portable builds to discover the same saved paths.
 
 ## Auto-discovery
 
@@ -91,13 +108,19 @@ Recommended to keep out of Git:
 - `workspace/`
 - personal settings under `%USERPROFILE%\.openclaw-launcher`
 
-## Portable build output
+## Build output
 
-The non-installer portable executable is generated under:
+Generated artifacts live under:
 
-- `launcher-src/dist/OpenClaw Launcher.exe`
+- `launcher-src/dist/`
 
-That file is intended for local testing and manual distribution. It usually should not be committed to Git because the generated binary is large and rebuildable from source.
+Useful build commands:
+
+- `npm run dist:portable`
+- `npm run dist:installer`
+- `npm run dist:win`
+
+The generated installer and portable executables should usually stay out of Git because they are rebuildable artifacts.
 
 ## Documentation
 

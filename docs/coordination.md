@@ -76,6 +76,13 @@
 - 程序文件和运行数据分开
 - 对本地自用来说也比较容易管理
 
+不管你使用的是：
+
+- 安装版 launcher
+- portable launcher
+
+只要它们最终指向同一个 `dataRoot`，它们就能共用同一套 `state / logs / workspace`。
+
 ## C 盘链接的作用
 
 为了兼容依赖默认 `.openclaw` 路径的程序，Launcher 会维护这个 Windows junction：
@@ -115,6 +122,12 @@ Launcher 的自动发现会处理三类信息。
 3. 如果这个链接指向某个 `...\state`
 4. 就从它反推出共享数据根目录
 5. 如果前面都没有，再回退到默认共享目录
+
+启动器自己的配置文件位置是：
+
+- `%USERPROFILE%\.openclaw-launcher\config\launcher-settings.json`
+
+所以安装版和 portable 版可以通过这份用户级配置共享当前保存的路径信息。
 
 ### 2. OpenClaw 仓库目录
 

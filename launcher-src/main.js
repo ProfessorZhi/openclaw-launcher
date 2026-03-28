@@ -191,9 +191,24 @@ function moveDirIfNeeded(oldDir, newDir) {
 }
 
 async function ensureUserOpenClawJunction(stateDir) {
+  const normalizedTarget = path.resolve(stateDir);
+  const existingTarget = await runPowerShell(`
+    $item = Get-Item '${escapePs(USER_OPENCLAW_LINK)}' -ErrorAction SilentlyContinue
+    if ($item -and $item.LinkType -eq 'Junction' -and $item.Target) {
+      $target = $item.Target
+      if ($target -is [array]) { $target = $target[0] }
+      [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+      Write-Output ([System.IO.Path]::GetFullPath($target))
+    }
+  `).catch(() => "");
+
+  if (existingTarget && path.resolve(existingTarget) === normalizedTarget) {
+    return;
+  }
+
   await runPowerShell(`
     if (Test-Path '${escapePs(USER_OPENCLAW_LINK)}') {
-      Remove-Item '${escapePs(USER_OPENCLAW_LINK)}' -Force
+      cmd /c rmdir "${USER_OPENCLAW_LINK}" | Out-Null
     }
     New-Item -ItemType Junction -Path '${escapePs(USER_OPENCLAW_LINK)}' -Target '${escapePs(stateDir)}' | Out-Null
   `);

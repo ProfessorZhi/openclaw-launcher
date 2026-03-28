@@ -7,12 +7,13 @@
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
-    "dist:win": "electron-builder --win portable"
+    "dist:portable": "electron-builder --win portable",
+    "dist:installer": "electron-builder --win nsis",
+    "dist:win": "electron-builder --win portable nsis"
   },
   "build": {
     "appId": "ai.openclaw.launcher",
     "productName": "OpenClaw Launcher",
-    "artifactName": "OpenClaw Launcher.${ext}",
     "directories": {
       "output": "dist"
     },
@@ -31,9 +32,23 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/openclaw-lobster.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "OpenClaw Launcher"
     }
   },
   "devDependencies": {
