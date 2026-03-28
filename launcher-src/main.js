@@ -228,7 +228,7 @@ async function saveIntegrationSettings(payload) {
   }
 
   saveSettings(nextSettings);
-  return { ok: true, message: "联动设置已保存。" };
+  return { ok: true, message: "Integration settings saved." };
 }
 
 async function detectInstallations() {
@@ -374,7 +374,7 @@ async function getStatusSnapshot() {
     if (ownedByLauncher) {
       return {
         kind: "launcher",
-        label: "已由启动器启动",
+        label: "Running (launcher-managed)",
         color: "green",
         closable: true,
         listenerPid: listener.OwningProcess,
@@ -387,7 +387,7 @@ async function getStatusSnapshot() {
     if (clawxRunning) {
       return {
         kind: "external",
-        label: "已运行（可能来自 ClawX）",
+        label: "Running (possibly started by ClawX)",
         color: "yellow",
         closable: false,
         listenerPid: listener.OwningProcess,
@@ -399,7 +399,7 @@ async function getStatusSnapshot() {
 
     return {
       kind: "orphan",
-      label: "已运行（外部实例，可关闭）",
+      label: "Running (external instance, can stop)",
       color: "green",
       closable: true,
       listenerPid: listener.OwningProcess,
@@ -411,7 +411,7 @@ async function getStatusSnapshot() {
 
   return {
     kind: clawxRunning ? "clawx" : "idle",
-    label: clawxRunning ? "ClawX 正在运行" : "未运行",
+    label: clawxRunning ? "ClawX is running" : "Not running",
     color: clawxRunning ? "yellow" : "gray",
     closable: false,
     listenerPid: null,
@@ -427,7 +427,7 @@ async function spawnManagedGateway() {
   const repo = settings.openclawRepoPath;
 
   if (!repo || !fs.existsSync(path.join(repo, "openclaw.mjs"))) {
-    throw new Error("没有找到 OpenClaw 仓库，请先在联动设置里填写 openclaw.mjs 所在目录。");
+    throw new Error("OpenClaw repo path is invalid. Expected to find openclaw.mjs there.");
   }
 
   clearPidRecord(runtime);
@@ -454,18 +454,18 @@ function computeProgress(elapsedMs) {
   if (elapsedMs < 2500) {
     return {
       percent: Math.min(26, 8 + Math.floor(elapsedMs / 160)),
-      label: "正在启动核心..."
+      label: "Starting OpenClaw..."
     };
   }
   if (elapsedMs < 15000) {
     return {
       percent: Math.min(74, 28 + Math.floor((elapsedMs - 2500) / 320)),
-      label: "正在加载插件与连接..."
+      label: "Loading plugins and connections..."
     };
   }
   return {
     percent: Math.min(88, 74 + Math.floor((elapsedMs - 15000) / 2200)),
-    label: "正在检测控制台..."
+    label: "Waiting for web console..."
   };
 }
 
@@ -485,8 +485,8 @@ async function monitorLaunchLifecycle(openBrowser, token) {
           emitProgress({
             stage: "timeout",
             percent: 68,
-            label: "启动超时，仍未检测到 OpenClaw 网关端口。",
-            statusText: "未运行",
+            label: "Startup timed out before the OpenClaw web console responded.",
+            statusText: "Not running",
             statusColor: "gray",
             busy: false
           });
@@ -498,7 +498,7 @@ async function monitorLaunchLifecycle(openBrowser, token) {
           stage: "launching",
           percent: progress.percent,
           label: progress.label,
-          statusText: "启动中",
+          statusText: "Starting",
           statusColor: "blue",
           busy: true
         });
@@ -521,8 +521,8 @@ async function monitorLaunchLifecycle(openBrowser, token) {
         emitProgress({
           stage: "browser",
           percent: 92,
-          label: "后端已启动，正在打开网页...",
-          statusText: "已运行",
+          label: "Web console is responding, opening browser...",
+          statusText: "Running",
           statusColor: "green",
           busy: false
         });
@@ -535,8 +535,8 @@ async function monitorLaunchLifecycle(openBrowser, token) {
         emitProgress({
           stage: "done",
           percent: 100,
-          label: "启动成功",
-          statusText: "已运行",
+          label: "Startup complete",
+          statusText: "Running",
           statusColor: "green",
           busy: false
         });
@@ -547,8 +547,8 @@ async function monitorLaunchLifecycle(openBrowser, token) {
         emitProgress({
           stage: "warning",
           percent: 92,
-          label: "OpenClaw 已运行，但网页控制台响应较慢，可稍后手动打开。",
-          statusText: "已运行",
+          label: "OpenClaw is running, but the web console is still responding slowly. You can open it manually later.",
+          statusText: "Running",
           statusColor: "green",
           busy: false
         });
@@ -558,8 +558,8 @@ async function monitorLaunchLifecycle(openBrowser, token) {
       emitProgress({
         stage: "online",
         percent: 90,
-        label: "OpenClaw 已运行，正在等待网页控制台准备...",
-        statusText: "已运行",
+        label: "OpenClaw is running. The web console may still need a moment to fully render.",
+        statusText: "Running",
         statusColor: "green",
         busy: false
       });
@@ -574,17 +574,17 @@ async function monitorLaunchLifecycle(openBrowser, token) {
 
 async function startNormalLaunch() {
   if (launchInFlight) {
-    return { ok: false, message: "启动流程正在进行中，请稍等。" };
+    return { ok: false, message: "Launch already in progress." };
   }
 
   const snapshot = await getStatusSnapshot();
   if (snapshot.clawxRunning) {
-    return { ok: false, message: "ClawX 正在运行，请先关闭 ClawX，再启动 OpenClaw。" };
+    return { ok: false, message: "ClawX is running. Close ClawX before starting OpenClaw." };
   }
 
   if (snapshot.kind === "launcher" || snapshot.kind === "orphan") {
     await shell.openExternal(DASHBOARD_URL);
-    return { ok: true, message: "OpenClaw 已在运行，已为你打开网页控制台。" };
+    return { ok: true, message: "OpenClaw is already running. Opening the dashboard instead." };
   }
 
   launchInFlight = true;
@@ -592,8 +592,8 @@ async function startNormalLaunch() {
   emitProgress({
     stage: "checking",
     percent: 8,
-    label: "正在检查运行环境...",
-    statusText: "启动中",
+    label: "Checking environment...",
+    statusText: "Starting",
     statusColor: "blue",
     busy: true
   });
@@ -605,8 +605,8 @@ async function startNormalLaunch() {
     emitProgress({
       stage: "timeout",
       percent: 0,
-      label: `启动失败：${error.message || error}`,
-      statusText: "未运行",
+      label: `Startup failed: ${error.message || error}`,
+      statusText: "Not running",
       statusColor: "gray",
       busy: false
     });
@@ -616,8 +616,8 @@ async function startNormalLaunch() {
   emitProgress({
     stage: "boot",
     percent: 16,
-    label: "正在启动 OpenClaw...",
-    statusText: "启动中",
+    label: "Starting OpenClaw...",
+    statusText: "Starting",
     statusColor: "blue",
     busy: true
   });
@@ -630,8 +630,8 @@ async function startNormalLaunch() {
     emitProgress({
       stage: "timeout",
       percent: 0,
-      label: `启动监控异常：${error.message || error}`,
-      statusText: "未运行",
+      label: `Launch monitor failed: ${error.message || error}`,
+      statusText: "Not running",
       statusColor: "gray",
       busy: false
     });
@@ -653,22 +653,22 @@ async function spawnPowerShellFile(filePath) {
 async function startDebugLaunch() {
   const snapshot = await getStatusSnapshot();
   if (snapshot.clawxRunning) {
-    return { ok: false, message: "ClawX 正在运行，请先关闭 ClawX，再进行前台调试启动。" };
+    return { ok: false, message: "ClawX is running. Close ClawX before starting debug mode." };
   }
   if (snapshot.listenerPid) {
-    return { ok: false, message: "当前已有 OpenClaw 在运行，无法再启动新的调试实例。" };
+    return { ok: false, message: "Another OpenClaw instance is already running. Stop it before debug start." };
   }
 
   await spawnPowerShellFile(DEBUG_SCRIPT);
   emitProgress({
     stage: "debug",
     percent: 100,
-    label: "已打开前台调试窗口，请在日志窗口里查看启动过程。",
-    statusText: "调试中",
+    label: "Debug mode started. A foreground console window was opened for logs.",
+    statusText: "Debug mode",
     statusColor: "blue",
     busy: false
   });
-  return { ok: true, message: "已打开前台调试窗口。" };
+  return { ok: true, message: "Debug mode started." };
 }
 
 async function stopCurrentInstance() {
@@ -690,12 +690,12 @@ async function stopCurrentInstance() {
     emitProgress({
       stage: "stopped",
       percent: 0,
-      label: "当前没有可由启动器关闭的 OpenClaw 实例。",
-      statusText: "未运行",
+      label: "No running OpenClaw instance was found to stop.",
+      statusText: "Not running",
       statusColor: "gray",
       busy: false
     });
-    return { ok: false, message: "当前没有可由启动器关闭的 OpenClaw 实例。" };
+    return { ok: false, message: "No running OpenClaw instance was found to stop." };
   }
 
   await runPowerShell(`
@@ -708,12 +708,12 @@ async function stopCurrentInstance() {
   emitProgress({
     stage: "stopped",
     percent: 0,
-    label: "已关闭当前 OpenClaw。",
-    statusText: "未运行",
+    label: "OpenClaw stopped.",
+    statusText: "Not running",
     statusColor: "gray",
     busy: false
   });
-  return { ok: true, message: "已关闭当前 OpenClaw。" };
+  return { ok: true, message: "OpenClaw stopped." };
 }
 
 function loadApiConfig() {
@@ -811,7 +811,7 @@ app.whenReady().then(async () => {
     return { ok: true };
   });
   ipcMain.handle("open:docs", async () => {
-    const preferred = path.join(DOCS_DIR, "协同说明.md");
+    const preferred = path.join(DOCS_DIR, "coordination.md");
     const fallback = path.join(ROOT, "README.md");
     await shell.openPath(fs.existsSync(preferred) ? preferred : fallback);
     return { ok: true };
@@ -822,9 +822,9 @@ app.whenReady().then(async () => {
 $OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Set-Location '${escapePs(repo)}'
 function openclaw { node .\\openclaw.mjs @args }
-Write-Host 'OpenClaw 命令行已就绪。'
+Write-Host 'OpenClaw 闂佸憡绋掗崹婵嬪箮閵堝洦鍋橀悘鐐舵閸ゆ帡鎮樿箛姘惈闁告閰ｆ俊?
 Write-Host ''
-Write-Host '请直接在提示符后输入命令，例如：'
+Write-Host '闁荤姴娲ˉ鎾趁洪崸妤€绠抽柕澶堝劜闊剟鏌熺紒妯哄闁靛洦姘ㄧ划顓㈡晝閳ь剟骞冨Δ浣圭秶闁规儳鍟垮鎶芥煕濞戞瑥鐏婇柟韬插€濋弫宥囦沪閼测晙绱ｆ繝纰樷偓鍐蹭喊缂?
 Write-Host '  openclaw --version'
 Write-Host '  openclaw gateway probe'
 Write-Host '  openclaw dashboard'

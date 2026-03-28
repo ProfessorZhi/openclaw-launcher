@@ -1,6 +1,8 @@
 launcher/
 launcher-src/node_modules/
 launcher-src/dist/
+scripts/python/__pycache__/
+scripts/python/build/
 logs/
 state/
 workspace/
