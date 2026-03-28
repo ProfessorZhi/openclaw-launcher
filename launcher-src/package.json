@@ -1,0 +1,46 @@
+{
+  "name": "openclaw-launcher",
+  "version": "1.0.0",
+  "description": "Lightweight Electron launcher for local OpenClaw on Windows",
+  "main": "main.js",
+  "author": "Codex",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "ai.openclaw.launcher",
+    "productName": "OpenClaw Launcher",
+    "artifactName": "OpenClaw Launcher.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "styles.css",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/openclaw-lobster.ico"
+    }
+  },
+  "devDependencies": {
+    "electron": "^37.3.1",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "app-builder-bin": "^5.0.0-alpha.12"
+  }
+}

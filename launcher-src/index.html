@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenClaw 启动器</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">OpenClaw Launcher</p>
+          <h1>OpenClaw</h1>
+          <p class="subtitle">启动本地 Gateway，并打开网页控制台。</p>
+        </div>
+        <div class="hero-card">
+          <div class="status-row">
+            <span id="status-dot" class="status-dot gray"></span>
+            <div>
+              <div class="status-label">当前状态</div>
+              <div id="status-text" class="status-text">检测中...</div>
+            </div>
+          </div>
+          <div class="dashboard-row">
+            控制台地址：
+            <button id="dashboard-link" class="link-button">http://127.0.0.1:18789/</button>
+          </div>
+          <div class="progress-block">
+            <div class="progress-head">
+              <span id="progress-label">空闲</span>
+              <span id="progress-percent">0%</span>
+            </div>
+            <div class="progress-track">
+              <div id="progress-bar" class="progress-bar"></div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="panel primary-panel">
+          <button id="start-btn" class="primary-action">启动并打开网页</button>
+          <button id="cli-btn" class="primary-action secondary">打开命令行窗口</button>
+          <div class="secondary-grid">
+            <button id="debug-btn">前台调试启动</button>
+            <button id="stop-btn">关闭当前 OpenClaw</button>
+            <button id="logs-btn">打开日志文件夹</button>
+            <button id="docs-btn">查看说明文档</button>
+            <button id="settings-btn">联动设置</button>
+            <button id="api-btn">配置模型 API</button>
+          </div>
+        </section>
+
+        <section class="panel tips-panel">
+          <h2>常用命令</h2>
+          <ul class="command-list">
+            <li><code>openclaw --version</code><span>查看版本</span></li>
+            <li><code>openclaw gateway probe</code><span>检查 Gateway 是否正在运行</span></li>
+            <li><code>openclaw gateway run</code><span>在当前窗口启动 Gateway</span></li>
+            <li><code>openclaw dashboard</code><span>打开本地网页控制台</span></li>
+            <li><code>openclaw doctor</code><span>执行本地诊断</span></li>
+          </ul>
+          <p class="panel-note">命令行窗口打开后，直接在命令提示符后输入命令即可，不要输入 1、2 这类序号。</p>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="api-dialog" class="app-dialog">
+      <form method="dialog" id="api-form">
+        <h3>配置模型 API</h3>
+        <label>
+          提供商
+          <select id="provider">
+            <option value="minimax-portal">minimax-portal</option>
+            <option value="minimax">minimax</option>
+          </select>
+        </label>
+        <label>
+          模型 ID
+          <input id="model-id" type="text" />
+        </label>
+        <label>
+          API Key / Token
+          <textarea id="api-key" rows="5"></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="ghost-button" type="button" id="api-cancel">取消</button>
+          <button value="default" class="solid-button" type="button" id="api-save">保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog" class="app-dialog">
+      <form method="dialog" id="settings-form">
+        <h3>联动设置</h3>
+        <p class="dialog-tip">
+          默认共享数据根目录会跟着安装所在盘走，例如装在 E 盘时默认是 `E:\OpenClaw Shared Data`。
+          你也可以改成别的位置，`state`、`logs`、`workspace` 会一起迁移。
+        </p>
+        <label>
+          共享数据根目录
+          <input id="data-root" type="text" />
+        </label>
+        <label>
+          OpenClaw 仓库目录
+          <input id="openclaw-repo" type="text" />
+        </label>
+        <label>
+          ClawX 客户端 EXE
+          <input id="clawx-exe" type="text" />
+        </label>
+        <div class="dialog-actions split">
+          <button value="cancel" class="ghost-button" type="button" id="settings-detect">自动发现</button>
+          <div class="dialog-actions">
+            <button value="cancel" class="ghost-button" type="button" id="settings-cancel">取消</button>
+            <button value="default" class="solid-button" type="button" id="settings-save">保存</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

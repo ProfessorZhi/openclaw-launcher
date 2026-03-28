@@ -1,0 +1,7 @@
+launcher/
+launcher-src/node_modules/
+launcher-src/dist/
+logs/
+state/
+workspace/
+config/
